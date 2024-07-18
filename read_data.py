@@ -47,16 +47,17 @@ def read_data(json_file, pre, left_stim, right_stim, post):
         for i in right_stim:
             data['right'].append(mne_dataset[i])
      
-    # Create concatanated channels 
+    # Create concatanated data 
     concatanated_data = {}
     num_unique_channels = len(set(channels)) 
     for i in data.keys():
         concatanated_data[i] = []
         for t in range(len(data[i])):
             if t < num_unique_channels:
-                concatanated_data[i].append(data[i][t])
+                concatanated_data[i].append(data[i][t].copy())
             if t >= num_unique_channels: 
                 to_concat = t % num_unique_channels
                 concatanated_data[i][to_concat] = mne.concatenate_raws([concatanated_data[i][to_concat], data[i][t]].copy())
+            
 
     return data, concatanated_data
