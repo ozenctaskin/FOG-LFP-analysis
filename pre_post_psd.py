@@ -1,38 +1,51 @@
 import mne 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import numpy as np
+from neurodsp.sim import sim_combined
+from neurodsp.spectral import compute_spectrum, trim_spectrum
+from neurodsp.plts import plot_power_spectra
 
-def pre_post_psd(pre, post, epoch_length, fig_title):
+# Import IRASA related functions
+from neurodsp.aperiodic import compute_irasa, fit_irasa
+
+def pre_post_psd(pre, post, fig_title):
 
     # Freqs
     freq_bands = {'theta': (4,8), 'alpha': (8,12), 
                   'beta': (12,30), 'low_gamma': (30,90)}
     
-    # Combine channels into a single matrix and epoch
-    pre_data = pre[0].copy()
-    for i in range(1, len(pre)):
-        pre_data.add_channels([pre[i]].copy())
-    epoched_pre_data = mne.make_fixed_length_epochs(pre_data.copy(), epoch_length)
-
-    post_data = post[0].copy()
-    for i in range(1, len(post)):
-        post_data.add_channels([post[i]].copy())
-    epoched_post_data = mne.make_fixed_length_epochs(post_data.copy(), epoch_length)
+    # Filtering freq
+    f_range = (3, 80)
     
-    # Compute and plot average PSDs
-    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(10, 10))
-    custom_lines = [Line2D([0], [0], color='blue', lw=2), Line2D([0], [0], color='red', lw=2)]
-    fig.legend(custom_lines, ['pre', 'post'])
-    fig.suptitle(fig_title)
-    channels = ['ONE_THREE_LEFT', 'ONE_THREE_RIGHT', 'ZERO_TWO_LEFT', 'ZERO_TWO_RIGHT']
-    average=True
-    for idx, i in enumerate(freq_bands.keys()):
-        row = idx // 2
-        col = idx % 2
-        print(row, col)
-        epoched_pre_data.load_data().filter(l_freq=2, h_freq=122, picks=channels).compute_psd(picks=channels, fmin=freq_bands[i][0], fmax=freq_bands[i][1]).plot(picks=channels, axes=axes[row, col], color='blue', spatial_colors=False, average=average, show=False)
-        epoched_post_data.load_data().filter(l_freq=2, h_freq=122, picks=channels).compute_psd(picks=channels, fmin=freq_bands[i][0], fmax=freq_bands[i][1]).plot(picks=channels, axes=axes[row, col], color='red', spatial_colors=False, average=average, show=False)
-        axes[row, col].set_title(i)
-        plt.show()
+    # Compute periodic and oscillatory components with IRASA
+    channel_names = []
+    pre_freqs, pre_aperiodic, pre_periodic = [[],[],[]]
+    post_freqs, post_aperiodic, post_periodic = [[],[],[]]    
+    for i in range(len(pre)):
+        channel_names.append(pre[i].ch_names)
+        freqs, psd_aperiodic, psd_periodic = compute_irasa(pre[i].get_data()[0,:], int(pre[i].info['sfreq']), f_range=f_range)
+        pre_freqs.append(freqs), pre_aperiodic.append(psd_aperiodic), pre_periodic.append(psd_periodic)
+        freqs, psd_aperiodic, psd_periodic = compute_irasa(post[i].get_data()[0,:], int(pre[i].info['sfreq']), f_range=f_range)
+        post_freqs.append(freqs), post_aperiodic.append(psd_aperiodic), post_periodic.append(psd_periodic)        
+    
+    # Average periodic and aperiodic signals from all channels and plot
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(13, 7))
+    custom_lines = [Line2D([0], [0], color='blue', lw=2), Line2D([0], [0], color='green', lw=2)]
+    for i in [1,2]:
+        axes[0].plot(pre_freqs[0], np.mean(np.stack(pre_periodic, axis=0), axis=0), color='blue')
+        axes[0].plot(post_freqs[0], np.mean(np.stack(post_periodic, axis=0), axis=0), color='green')
+        axes[1].plot(pre_freqs[0], np.mean(np.stack(pre_aperiodic, axis=0), axis=0), color='blue')
+        axes[1].plot(post_freqs[0], np.mean(np.stack(post_aperiodic, axis=0), axis=0), color='green')        
+        axes[0].set_title('Periodic')
+        axes[0].set_xlabel('Frequency (Hz)')
+        axes[0].set_ylabel('Power (V^2/Hz)')
+        axes[0].legend(custom_lines, ['pre', 'post'])
         
-    return epoched_pre_data, epoched_post_data
+        axes[1].set_title('Aperiodic')
+        axes[1].set_xlabel('Frequency (Hz)')
+        axes[1].set_ylabel('Power (V^2/Hz)')
+        axes[1].legend(custom_lines, ['pre', 'post'])
+    fig.suptitle(fig_title)
+        
+    return channel_names, pre_freqs, pre_aperiodic, pre_periodic, post_freqs, post_aperiodic, post_periodic
