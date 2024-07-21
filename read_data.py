@@ -60,4 +60,4 @@ def read_data(json_file, pre, left_stim, right_stim, post):
                 concatanated_data[i][to_concat] = mne.concatenate_raws([concatanated_data[i][to_concat], data[i][t]].copy())
             
 
-    return data, concatanated_data
+    return mne_dataset, concatanated_data
