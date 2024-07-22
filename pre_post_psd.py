@@ -12,7 +12,7 @@ def pre_post_psd(pre, post, fig_title):
                   'beta': (12,30), 'low_gamma': (30,90)}
     
     # Filtering freq
-    f_range = (4, 40)
+    f_range = (5, 40)
     
     # Compute periodic and oscillatory components with IRASA
     channel_names = []
